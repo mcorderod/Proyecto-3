@@ -1,8 +1,8 @@
-# Análisis de interpolación espacial para datos de precipitación del estado de Texas
+# Análisis de interpolación espacial para datos de precipitación del Estado de Texas
 
 ## Resumen
 
-Este repositorio contiene el código y datos de la presentación sobre el proyecto 3 del curso SP-1649 Tópicos de Estadística Espacial Aplicada: El titulo del repositorio es **Analisis de interpolación espacial para datos de precipitación del estado de Texas**, desarrollado por Melissa Cordero Díaz y Marco Otoya Chavarría, como parte de la Maestría en Estadística de la Universidad de Costa Rica.
+Este repositorio contiene el código y datos de la presentación sobre el proyecto 3 del curso SP-1649 Tópicos de Estadística Espacial Aplicada: El titulo del repositorio es **Analisis de interpolación espacial para datos de precipitación del Estado de Texas**, desarrollado por Melissa Cordero Díaz y Marco Otoya Chavarría, como parte de la Maestría en Estadística de la Universidad de Costa Rica.
 
 
 - [Análisis de interpolación espacial para datos de precipitación del estado de Texas](#análisis-de-interpolación-espacial-para-datos-de-precipitación-del-estado-de-Texas)
@@ -53,7 +53,7 @@ Los datos cuentan con las respectivas coordenadas espaciales y los promedios anu
 
 El análisis de los datos se describe en el archivo `PROYECTO 3 GEOESPACIAL.R` y el artículo vinculado al repositorio.
 
-De forma resumida, los análisis consiste en la aplicación de un métodos de interpolación deterministas (método de la distancia inversa ponderada - IDW) y un método de interpolación estadísticos (Kriging) para datos de precipitación anual reportada por estaciones climáticas ubicadas en el estado de Texas, con el fin de realizar una interpolación de la precipitación a las áreas en donde no se tiene datos. 
+De forma resumida, los análisis consiste en la aplicación de un métodos de interpolación deterministas (método de la distancia inversa ponderada - IDW) y un método de interpolación estadísticos (Kriging) para datos de precipitación anual reportada por estaciones climáticas ubicadas en el Estado de Texas, con el fin de realizar una interpolación de la precipitación a las áreas en donde no se tiene datos. 
 
 Se inicia con un analisis exploratorio de los datos, para posteriormente aplicar método de la distancia inversa ponderada (IDW) y realizar una interpolación de la superficie con los resultados obtenidos. Posteriormente se palica el métoodo de interpolación estadístico (Kriging) mediante tres pasos: Eliminar la tendencia espacial, definir el modelo del variograma que mejor caracterice la autocorrelación espacial de los datos, onterpolación de la superficie y unir la superficie interpolada Kriging a la superficie interpolada de tendencia (resultado final). Finalmente se comparan los resultados obtenidos y se concluye el analisis con la construcción de una mapa de varianci. 
 
