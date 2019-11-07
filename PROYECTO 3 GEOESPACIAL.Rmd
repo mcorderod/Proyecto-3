@@ -1,0 +1,460 @@
+---
+title: "PROYECTO 3"
+author: "MELISSA CORDERO Y MARCO OTOYA"
+date: "3 de noviembre de 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+#LIBRERIAS UTILIZADAS 
+library(rgdal)
+library(tmap)
+library(spatstat)  # Used for the dirichlet tessellation function
+library(maptools)  # Used for conversion from SPDF to ppp
+library(raster)    # Used to clip out thiessen polygons
+library(gstat) # Use gstat's idw routine
+library(sp)    # Used for the spsample function
+```
+
+```{r}
+# Load precipitation data
+z <- gzcon(url("http://colby.edu/~mgimond/Spatial/Data/precip.rds"))
+precip <- readRDS(z)
+
+# Load Texas boudary map
+z <- gzcon(url("http://colby.edu/~mgimond/Spatial/Data/texas.rds"))
+mapa <- readRDS(z)
+```
+
+< **Exploración de los datos**
+
+```{r}
+summary(mapa)
+summary(precip)
+bubble(precip , "Precip_in", col=c("#00ff0088", "#00ff0088"), main = "Precipitación Anual en (Pulgadas In)")
+```
+
+
+```{r}
+# Replace point boundary extent with that of Texas
+precip@bbox <- mapa@bbox
+
+tm_shape(mapa) + tm_polygons() +
+  tm_shape(precip) +
+  tm_dots(col="Precip_in", palette = "viridis", auto.palette.mapping = FALSE,
+             title="Sampled precipitation \n(in inches)", size="Precip_in") +
+  tm_compass(type = "4star", position = c("left", "bottom")) +
+  tm_credits("Fuente: Introducción a SIG y análisis espacial, Manuel Gimond", position=c("left", "bottom"))+
+  tm_layout(main.title = "Texas: Precipitación anual promedio (en pulgadas) de acuerdo a las estaciones climáticas", main.title.size = 1 ,main.title.position = "left",fontface = 1) + 
+  tm_text("Precip_in", just="left", xmod=.5, size = 0.7) +
+  tm_legend(legend.outside=TRUE)
+```
+
+
+> **Distancia inversa ponderada (IDW)**
+
+```{r}
+# Create an empty grid where n is the total number of cells
+grd              <- as.data.frame(spsample(precip, "regular", n=40000))
+names(grd)       <- c("X", "Y")
+coordinates(grd) <- c("X", "Y")
+gridded(grd)     <- TRUE  # Create SpatialPixel object
+fullgrid(grd)    <- TRUE  # Create SpatialGrid object
+
+# Add P's projection information to the empty grid
+proj4string(grd) <- proj4string(precip)
+
+# Interpolate the grid cells using a power value of 2 (idp=2.0)
+P.idw <- gstat::idw(Precip_in ~ 1, precip, newdata=grd, idp=3.0)
+
+P.idw.data <- as.data.frame(P.idw )
+
+# Convert to raster object then clip to Texas
+r       <- raster(P.idw)
+r.m     <- mask(r, mapa)
+
+# Plot
+tm_shape(r.m) +
+  tm_raster(n=5,palette = "viridis", auto.palette.mapping = T,
+            title="Predicción de precipitación \n(en pulgadas)") + 
+  tm_shape(precip) + tm_dots(size="Precip_in") +
+  tm_compass(type = "4star", position = c("left", "bottom")) +
+  tm_credits("Fuente: Introducción a SIG y análisis espacial, Manuel Gimond", position=c("left", "bottom"))+
+  tm_layout(main.title = "Texas: Precipitación anual promedio (en pulgadas) para varios sitios meteorológicos",   main.title.size = 1 ,main.title.position = "left",fontface = 1)+
+  tm_legend(legend.outside=TRUE)
+```
+
+
+```{r}
+# Define the 1st order polynomial equation
+f.1 <- as.formula(Precip_in ~ X + Y) 
+
+# Add X and Y to P
+precip$X <- coordinates(precip)[,1]
+precip$Y <- coordinates(precip)[,2]
+
+# Compute the sample variogram; note that the f.1 trend model is one of the
+# parameters passed to variogram(). This tells the function to create the 
+# variogram on the de-trended data.
+var.smpl <- variogram(f.1, precip, cloud = FALSE, cutoff=1000000, width=89900)
+
+
+# Compute the variogram model by passing the nugget, sill and range values
+# to fit.variogram() via the vgm() function.
+dat.fit.Sph  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Sph", range=590000, nugget=0))
+
+dat.fit.Nug <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Nug", range=590000, nugget=0))
+
+dat.fit.Exp  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Exp", range=590000, nugget=0))
+
+dat.fit.Gau  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Gau", range=590000, nugget=0))
+
+dat.fit.Mat  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Mat", range=590000, nugget=0))
+
+dat.fit.Cir  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Cir", range=590000, nugget=0))
+
+dat.fit.Exc  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Exc", range=590000, nugget=0))
+
+dat.fit.Lin  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Lin", range=590000, nugget=0))
+
+dat.fit.Bes  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Bes", range=590000, nugget=0))
+
+dat.fit.Per  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Per", range=590000, nugget=0))
+
+dat.fit.Wav  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Wav", range=590000, nugget=0))
+
+dat.fit.Hol  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Hol", range=590000, nugget=0))
+
+dat.fit.Log  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Log", range=590000, nugget=0))
+
+dat.fit.Spl  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Spl", range=590000, nugget=0))
+
+dat.fit.Leg  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Leg", range=590000, nugget=0))
+```
+
+```{r}
+# The following plot allows us to assess the fit
+plot(var.smpl, dat.fit.Sph, xlim=c(0,1000000))
+plot(var.smpl, dat.fit.Nug, xlim=c(0,1000000))
+plot(var.smpl, dat.fit.Exp, xlim=c(0,1000000))
+plot(var.smpl, dat.fit.Gau, xlim=c(0,1000000))
+plot(var.smpl, dat.fit.Mat, xlim=c(0,1000000))
+plot(var.smpl, dat.fit.Cir, xlim=c(0,1000000))
+plot(var.smpl, dat.fit.Exc, xlim=c(0,1000000))
+plot(var.smpl, dat.fit.Lin, xlim=c(0,1000000))
+
+plot(var.smpl, dat.fit.Bes, xlim=c(0,1000000))
+plot(var.smpl, dat.fit.Per, xlim=c(0,1000000))
+plot(var.smpl, dat.fit.Wav, xlim=c(0,1000000))
+plot(var.smpl, dat.fit.Hol, xlim=c(0,1000000))
+plot(var.smpl, dat.fit.Log, xlim=c(0,1000000))
+plot(var.smpl, dat.fit.Spl, xlim=c(0,1000000))
+plot(var.smpl, dat.fit.Leg, xlim=c(0,1000000))
+```
+
+>**Selección de los mejores modelos de variogramas**
+
+```{r}
+plot(var.smpl, dat.fit.Sph, xlim=c(0,1000000), xlab="Distancia (Spherical)", col="yellowgreen")
+plot(var.smpl, dat.fit.Cir, xlim=c(0,1000000), xlab="Distancia (Circular)", col="yellowgreen")
+plot(var.smpl, dat.fit.Lin, xlim=c(0,1000000), xlab="Distancia (Linear)", col="yellowgreen")
+plot(var.smpl, dat.fit.Wav, xlim=c(0,1000000), xlab="Distancia (Wave)", col="yellowgreen")
+```
+
+```{r}
+v <- variogram(f.1, precip, cloud = FALSE, cutoff=1000000, width=89900)
+v.fit <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=11, model="Cir", range=590000, nugget=3))
+ccol = 'darkblue' #grey(.5)
+plot(v, v.fit, pch = 3, panel = function(x,y,subscripts,...) {
+        larrows(0,v.fit$psill[1], v.fit$range[2], v.fit$psill[1], 
+            col=ccol, ends = 'both', length=.1, angle=15)
+        larrows(v.fit$range[2],0, v.fit$range[2], v.fit$psill[1], 
+            col=ccol, ends = 'both', length=.1, angle=15)
+        larrows(v.fit$range[2],v.fit$psill[1], v.fit$range[2], 
+            sum(v.fit$psill), 
+            col=ccol, ends = 'both', length=.1, angle=15)
+        ltext(v.fit$rang[2]/2, 1.2*v.fit$psill[1], "range", col=ccol,
+            adj = c(.5, 0), cex=.9)
+        ltext(1.02 * v.fit$rang[2], 0.5 *v.fit$psill[1], "nugget", col=ccol,
+            adj = c(0, 0.5), cex=.9)
+        ltext(1.02 * v.fit$rang[2], v.fit$psill[1] + 0.5 * v.fit$psill[2], 
+            "partial sill", col=ccol, adj = c(0, 0.5), cex=.9)
+        vgm.panel.xyplot(x,y,subscripts,...)
+    }
+)
+```
+
+>**Interpolación de la superficie Modelo Circular **
+
+```{r}
+# Define the trend model
+f.1 <- as.formula(Precip_in ~ X + Y) 
+
+#MODELO CIRCULAR
+# Perform the krige interpolation (note the use of the variogram model
+# created in the earlier step)
+dat.krg <- krige( f.1, precip, grd, dat.fit.Cir)
+
+# Convert kriged surface to a raster object for clipping
+r <- raster(dat.krg)
+r.m <- mask(r, mapa)
+
+# Plot the map
+tm_shape(r.m) + 
+  tm_raster(n=5, palette="viridis", auto.palette.mapping=FALSE, 
+            title="Predicción de precipitación \n(en pulgadas)") +
+  tm_shape(precip) + tm_dots(size="Precip_in") +
+  tm_compass(type = "4star", position = c("left", "bottom")) +
+  tm_credits("Fuente: Introducción a SIG y análisis espacial, Manuel Gimond", position=c("left", "bottom"))+
+  tm_layout(main.title = "Texas: Precipitación anual promedio (en pulgadas) para varios sitios meteorológicos",   main.title.size = 1 ,main.title.position = "left",fontface = 1) +
+  tm_legend(legend.outside=TRUE)
+
+#MODELO ESFERICO
+# Perform the krige interpolation (note the use of the variogram model
+# created in the earlier step)
+dat.krg <- krige( f.1, precip, grd, dat.fit.Sph)
+
+# Convert kriged surface to a raster object for clipping
+r <- raster(dat.krg)
+r.m <- mask(r, mapa)
+
+# Plot the map
+tm_shape(r.m) + 
+  tm_raster(n=5, palette="viridis", auto.palette.mapping=FALSE, 
+            title="Predicción de precipitación \n(en pulgadas)") +
+  tm_shape(precip) + tm_dots(size="Precip_in") +
+  tm_compass(type = "4star", position = c("left", "bottom")) +
+  tm_credits("Fuente: Introducción a SIG y análisis espacial, Manuel Gimond", position=c("left", "bottom"))+
+  tm_layout(main.title = "Texas: Precipitación anual promedio (en pulgadas) para varios sitios meteorológicos",   main.title.size = 1 ,main.title.position = "left",fontface = 1) +
+  tm_legend(legend.outside=TRUE)
+
+#MODELO LINEAR
+# Perform the krige interpolation (note the use of the variogram model
+# created in the earlier step)
+dat.krg <- krige( f.1, precip, grd, dat.fit.Lin)
+
+# Convert kriged surface to a raster object for clipping
+r <- raster(dat.krg)
+r.m <- mask(r, mapa)
+
+# Plot the map
+tm_shape(r.m) + 
+  tm_raster(n=5, palette="viridis", auto.palette.mapping=FALSE, 
+            title="Predicción de precipitación \n(en pulgadas)") +
+  tm_shape(precip) + tm_dots(size="Precip_in") +
+  tm_compass(type = "4star", position = c("left", "bottom")) +
+  tm_credits("Fuente: Introducción a SIG y análisis espacial, Manuel Gimond", position=c("left", "bottom"))+
+  tm_layout(main.title = "Texas: Precipitación anual promedio (en pulgadas) para varios sitios meteorológicos",   main.title.size = 1 ,main.title.position = "left",fontface = 1) +
+  tm_legend(legend.outside=TRUE)
+
+
+#MODELO WAVE
+# Perform the krige interpolation (note the use of the variogram model
+# created in the earlier step)
+dat.krg <- krige( f.1, precip, grd, dat.fit.Wav)
+
+# Convert kriged surface to a raster object for clipping
+r <- raster(dat.krg)
+r.m <- mask(r, mapa)
+
+# Plot the map
+tm_shape(r.m) + 
+  tm_raster(n=5, palette="viridis", auto.palette.mapping=FALSE, 
+            title="Predicción de precipitación \n(en pulgadas)") +
+  tm_shape(precip) + tm_dots(size="Precip_in") +
+  tm_compass(type = "4star", position = c("left", "bottom")) +
+  tm_credits("Fuente: Introducción a SIG y análisis espacial, Manuel Gimond", position=c("left", "bottom"))+
+  tm_layout(main.title = "Texas: Precipitación anual promedio (en pulgadas) para varios sitios meteorológicos",   main.title.size = 1 ,main.title.position = "left",fontface = 1) +
+  tm_legend(legend.outside=TRUE)
+```
+
+
+```{r}
+
+#MODELO CIRCULAR
+# Perform the krige interpolation (note the use of the variogram model
+# created in the earlier step)
+dat.krg <- krige( f.1, precip, grd, dat.fit.Cir)
+
+r   <- raster(dat.krg, layer="var1.var")
+r.m <- mask(r, mapa)
+
+tm_shape(r.m) + 
+  tm_raster(n=5, palette ="YlOrRd",
+            title="Mapa de variancia\n(Pulgadas al cuadrado)") +tm_shape(precip) + tm_dots(size="Precip_in") +tm_compass(type = "4star", position = c("left", "bottom")) +
+  tm_credits("Fuente: Introducción a SIG y análisis espacial, Manuel Gimond", position=c("left", "bottom"))+
+  tm_layout(main.title = "Texas: Variancia obtenida del análisis de Kriging",   main.title.size = 1 ,main.title.position = "left",fontface = 1) +
+  tm_legend(legend.outside=TRUE)
+
+```
+
+
+> **Kriging: Ajustar el modelo de variograma**
+
+
+```{r}
+# Define the 1st order polynomial equation
+f.1 <- as.formula(Precip_in ~ X + Y) 
+ 
+# Add X and Y to P
+precip$X <- coordinates(precip)[,1]
+precip$Y <- coordinates(precip)[,2]
+
+# Run the regression model
+lm.1 <- lm( f.1, data=precip)
+precip$res <-lm.1$residuals
+
+plot(lm.1$residuals)
+plot(lm.1$residuals)
+
+precip@bbox <- mapa@bbox
+
+tm_shape(mapa) + tm_polygons() +
+  tm_shape(precip) +
+  tm_dots(col="res", palette = "viridis", auto.palette.mapping = FALSE,
+             title="Sampled precipitation \n(in inches)", size="Precip_in") +
+  tm_credits("Fuente: Introducción a SIG y análisis espacial, Manuel Gimond", position=c("left", "bottom"))+
+  tm_layout(main.title = "Texas: Precipitación anual promedio (en pulgadas) de acuerdo a las estaciones climáticas", main.title.size = 1 ,main.title.position = "left",fontface = 1) + 
+  tm_text("res", just="left", xmod=.5, size = 0.7) +
+  tm_legend(legend.outside=TRUE)
+
+```
+
+```{r}
+
+hscat(f.1,data=precip,breaks=(0:9)*100000, pch=1, cex=.3, col = 'gray')
+
+```
+
+
+```{r}
+library(gstat)
+library(lattice)
+cld <- variogram(f.1, precip, cloud = TRUE)
+svgm <- variogram(f.1, precip)
+## ~1 quiere decir media constante
+d <- data.frame(gamma = c(cld$gamma, svgm$gamma),
+    dist = c(cld$dist, svgm$dist),
+    id = c(rep("cloud", nrow(cld)), rep("sample variogram", nrow(svgm)))
+    )
+
+xyplot(gamma ~ dist | id, d,
+    scales = list(y = list(relation = "free", 
+      #ylim = list(NULL, c(-.005,0.7)))),
+      limits = list(NULL, c(0,20)))),
+    layout = c(1, 2), as.table = TRUE,
+    panel = function(x,y, ...) {
+        if (panel.number() == 2)
+            ltext(x+10, y, svgm$np, adj = c(0,0.4)) #$
+        panel.xyplot(x,y,...)
+    },
+    xlim = c(0, 590000),
+    cex = .5, pch = 3
+)
+```
+
+```{r}
+v <- variogram(f.1, precip)
+print(xyplot(gamma ~ dist, v, pch = 3, type = 'b', lwd = 2, col = 'darkblue',
+    panel = function(x, y, ...) {
+        for (i in 1:1000) {
+            precip$random = sample(precip$Precip_in)
+            v = variogram(log(random) ~ 1, precip)
+            llines(v$dist, v$gamma, col = 'grey')
+        }
+        panel.xyplot(x, y, ...)
+    },
+    ylim = c(0, 15), xlab = 'distance', ylab = 'semivariance'
+))
+```
+
+```{r}
+plot(variogram(f.1, precip))
+```
+
+
+```{r}
+plot(variogram(f.1, precip, cloud = FALSE, cutoff=1000000, width=89900, alpha = c(0, 45, 90, 135)))
+plot(variogram(f.1, precip, cloud = FALSE, cutoff=1000000))
+plot(variogram(f.1, precip, cloud = FALSE, cutoff=1000000), boundaries = c(0,50,100,seq(250,1500,250)))
+```
+
+
+```{r}
+show.vgms()
+show.vgms(model = "Mat", kappa.range = c(.1, .2, .5, 1, 2, 5, 10), max = 10)
+```
+
+```{r}
+v <-  variogram(f.1, precip, cloud = FALSE, cutoff=1000000, width=89900)
+plot(v)
+fit.variogram(v, vgm(1, "Sph", 800, 1))
+plot(variogramLine(vgm(0.59, "Sph", 896, 0.05), 1500), type = 'l')
+fit.variogram(v, vgm(1, "Sph", 10, 1))
+
+```
+
+
+```{r}
+v <- variogram(f.1, precip, cloud = FALSE, cutoff=1000000, width=89900)
+v.fit <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Sph", range=590000, nugget=3))
+ccol = 'darkblue' #grey(.5)
+plot(v, v.fit, pch = 3, panel = function(x,y,subscripts,...) {
+        larrows(0,v.fit$psill[1], v.fit$range[2], v.fit$psill[1], 
+            col=ccol, ends = 'both', length=.1, angle=15)
+        larrows(v.fit$range[2],0, v.fit$range[2], v.fit$psill[1], 
+            col=ccol, ends = 'both', length=.1, angle=15)
+        larrows(v.fit$range[2],v.fit$psill[1], v.fit$range[2], 
+            sum(v.fit$psill), 
+            col=ccol, ends = 'both', length=.1, angle=15)
+        ltext(v.fit$rang[2]/2, 1.2*v.fit$psill[1], "range", col=ccol,
+            adj = c(.5, 0), cex=.9)
+        ltext(1.02 * v.fit$rang[2], 0.5 *v.fit$psill[1], "nugget", col=ccol,
+            adj = c(0, 0.5), cex=.9)
+        ltext(1.02 * v.fit$rang[2], v.fit$psill[1] + 0.5 * v.fit$psill[2], 
+            "partial sill", col=ccol, adj = c(0, 0.5), cex=.9)
+        vgm.panel.xyplot(x,y,subscripts,...)
+    }
+)
+```
+
+```{r}
+fit.variogram(v, vgm(1, "Sph", 800, 0.06), fit.sills = c(FALSE, TRUE))
+
+v.dir <- variogram(f.1, precip, cloud = FALSE, cutoff=1000000, width=89900,alpha=(0:3)*45)
+v.anis <- vgm(.6, "Sph", 1600, .05, anis=c(45, 0.3))
+plot(v.dir, v.anis)
+```
+
+```{r}
+plot(variogram(f.1, precip, cloud = FALSE, cutoff=1000000, width=89900, map=TRUE))
+```
+
+
+
+
+
+
+
